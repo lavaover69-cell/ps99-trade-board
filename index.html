@@ -51,7 +51,6 @@ button {
 <div id="left">
   <h2>🐾 PS99 Trade Board</h2>
 
-  <!-- ONLY PET INPUT NOW -->
   <input id="pet" placeholder="Pet name">
   <button onclick="createListing()">Post</button>
 
@@ -96,6 +95,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let selectedId = null;
+let mode = null; // "offer" or "view"
 
 /* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
@@ -111,7 +111,7 @@ window.createListing = async function () {
   document.getElementById("pet").value = "";
 }
 
-/* ---------------- LIVE LISTINGS ---------------- */
+/* ---------------- LIVE LIST ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -136,9 +136,10 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- SEND OFFER BOX ---------------- */
+/* ---------------- OFFER MODE ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
+  mode = "offer";
 
   document.getElementById("title").innerText = "Send Offer";
 
@@ -150,26 +151,17 @@ window.openOffer = function(id) {
   document.getElementById("offers").innerHTML = "";
 }
 
-/* ---------------- SEND OFFER ---------------- */
-window.sendOffer = async function () {
-  const offer = document.getElementById("offerInput").value;
-  if (!offer || !selectedId) return;
-
-  await updateDoc(doc(db, "listings", selectedId), {
-    offers: arrayUnion({ text: offer })
-  });
-
-  document.getElementById("offerInput").value = "";
-}
-
-/* ---------------- VIEW OFFERS ---------------- */
+/* ---------------- VIEW MODE ---------------- */
 window.viewOffers = async function (id) {
   selectedId = id;
+  mode = "view";
 
   const snap = await getDoc(doc(db, "listings", id));
   const data = snap.data();
 
   document.getElementById("title").innerText = "Offers";
+
+  document.getElementById("offerBox").innerHTML = ""; // LOCK OFFERING
 
   let html = "";
 
@@ -184,11 +176,27 @@ window.viewOffers = async function (id) {
   document.getElementById("offers").innerHTML = html;
 }
 
+/* ---------------- SEND OFFER ---------------- */
+window.sendOffer = async function () {
+  if (mode !== "offer") return; // HARD LOCK FIX
+
+  const offer = document.getElementById("offerInput").value;
+  if (!offer || !selectedId) return;
+
+  await updateDoc(doc(db, "listings", selectedId), {
+    offers: arrayUnion({ text: offer })
+  });
+
+  document.getElementById("offerInput").value = "";
+}
+
 /* ---------------- DELETE ---------------- */
 window.deleteListing = async function (id) {
   await deleteDoc(doc(db, "listings", id));
 
   selectedId = null;
+  mode = null;
+
   document.getElementById("offerBox").innerHTML = "";
   document.getElementById("offers").innerHTML = "";
   document.getElementById("title").innerText = "Select a pet";
