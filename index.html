@@ -16,6 +16,7 @@ body {
   width: 45%;
   padding: 20px;
   border-right: 2px solid #2a2a44;
+  position: relative;
 }
 
 #right {
@@ -38,10 +39,29 @@ button {
   cursor: pointer;
 }
 
-input, select {
-  padding: 6px;
+input {
+  padding: 8px;
   width: 100%;
   margin: 5px 0;
+}
+
+#suggestBox {
+  background: #1c1c2e;
+  border: 1px solid #333;
+  position: absolute;
+  width: calc(100% - 40px);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 999;
+}
+
+.suggestItem {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.suggestItem:hover {
+  background: #2a2a44;
 }
 
 .offer {
@@ -58,11 +78,8 @@ input, select {
 <div id="left">
   <h2>🐾 PS99 Trade Plaza</h2>
 
-  <!-- AUTOFILL INPUT -->
-  <input id="search" list="petList" placeholder="Search pets...">
-  <datalist id="petList"></datalist>
-
-  <select id="petSelect"></select>
+  <input id="petInput" placeholder="Search PS99 pets..." oninput="showSuggestions()">
+  <div id="suggestBox"></div>
 
   <button onclick="createListing()">Post Pet</button>
 
@@ -111,60 +128,63 @@ let unsubscribeOffers = null;
 
 let PETS = [];
 
-/* ---------------- VALIDATION ENGINE ---------------- */
-function isValidPet(name) {
-  return PETS.some(p => {
-    const petName = typeof p === "string" ? p : p.name;
-    return petName.toLowerCase() === name.toLowerCase();
-  });
-}
-
-/* ---------------- LOAD PETS ---------------- */
+/* ---------------- BIG GAMES API LOAD ---------------- */
 async function loadPets() {
   try {
-    const res = await fetch("https://raw.githubusercontent.com/placeholder-ps99/pets-database/main/pets.json");
-    PETS = await res.json();
-  } catch {
+    const res = await fetch("https://ps99.biggamesapi.io/api/collection/Pets");
+    const json = await res.json();
+
+    PETS = json.data.map(p => p.configName);
+
+  } catch (e) {
+    console.log("API failed, fallback used");
+
     PETS = [
       "Huge Cat",
       "Huge Dog",
       "Huge Dragon",
       "Titanic Jelly",
-      "Titanic Balloon Cat",
-      "Rainbow Unicorn"
+      "Titanic Balloon Cat"
     ];
   }
-
-  renderPets(PETS);
 }
 
-/* ---------------- RENDER AUTOFILL ---------------- */
-function renderPets(list) {
-  const select = document.getElementById("petSelect");
-  const datalist = document.getElementById("petList");
+function isValidPet(name) {
+  return PETS.some(p => p.toLowerCase() === name.toLowerCase());
+}
 
-  select.innerHTML = "";
-  datalist.innerHTML = "";
+/* ---------------- AUTOFILL ---------------- */
+window.showSuggestions = function () {
+  const input = document.getElementById("petInput").value.toLowerCase();
+  const box = document.getElementById("suggestBox");
 
-  list.forEach(p => {
-    const name = typeof p === "string" ? p : p.name;
+  box.innerHTML = "";
+  if (!input) return;
 
-    const opt = document.createElement("option");
-    opt.value = name;
-    select.appendChild(opt);
+  const matches = PETS
+    .filter(p => p.toLowerCase().includes(input))
+    .slice(0, 10);
 
-    const d = document.createElement("option");
-    d.value = name;
-    datalist.appendChild(d);
+  matches.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "suggestItem";
+    div.innerText = p;
+
+    div.onclick = () => {
+      document.getElementById("petInput").value = p;
+      box.innerHTML = "";
+    };
+
+    box.appendChild(div);
   });
-}
+};
 
 /* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
-  const pet = document.getElementById("petSelect").value;
+  const pet = document.getElementById("petInput").value;
 
   if (!isValidPet(pet)) {
-    alert("Invalid pet. Please select from list.");
+    alert("Invalid pet. Please select from PS99 list.");
     return;
   }
 
@@ -173,7 +193,9 @@ window.createListing = async function () {
     offers: [],
     createdAt: Date.now()
   });
-}
+
+  document.getElementById("petInput").value = "";
+};
 
 /* ---------------- LISTINGS ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
@@ -207,34 +229,31 @@ window.openOffer = function(id) {
 
   document.getElementById("title").innerText = "Make Offer";
 
-  document.getElementById("offerBox").innerHTML = `
-    <select id="offerSelect" multiple size="6"></select>
-    <button onclick="sendOffer()">Send Offer</button>
-  `;
+  let html = "<p>Select pets:</p>";
 
-  const select = document.getElementById("offerSelect");
-
-  PETS.forEach(p => {
-    const name = typeof p === "string" ? p : p.name;
-
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    select.appendChild(opt);
+  PETS.slice(0, 50).forEach(p => {
+    html += `
+      <label>
+        <input type="checkbox" value="${p}"> ${p}
+      </label><br>
+    `;
   });
 
+  html += `<br><button onclick="sendOffer()">Send Offer</button>`;
+
+  document.getElementById("offerBox").innerHTML = html;
   document.getElementById("offers").innerHTML = "";
-}
+};
 
 /* ---------------- SEND OFFER ---------------- */
 window.sendOffer = async function () {
-  if (mode !== "offer") return;
-
-  const select = document.getElementById("offerSelect");
-  const pets = Array.from(select.selectedOptions).map(o => o.value);
+  const checkboxes = document.querySelectorAll("#offerBox input[type=checkbox]");
+  const pets = Array.from(checkboxes)
+    .filter(c => c.checked)
+    .map(c => c.value);
 
   if (!pets.length || !pets.every(isValidPet)) {
-    alert("Invalid offer. Only select valid pets.");
+    alert("Invalid offer.");
     return;
   }
 
@@ -245,7 +264,7 @@ window.sendOffer = async function () {
       status: "pending"
     })
   });
-}
+};
 
 /* ---------------- VIEW OFFERS ---------------- */
 window.viewOffers = function (id) {
@@ -264,31 +283,27 @@ window.viewOffers = function (id) {
 
     let html = "";
 
-    if (data?.offers) {
-      data.offers.forEach((o, i) => {
+    data?.offers?.forEach((o, i) => {
 
-        const actions = o.status === "pending"
-          ? `
-            <button onclick="acceptOffer(${i})">✔</button>
-            <button onclick="declineOffer(${i})">❌</button>
-          `
-          : `<small>${o.status}</small>`;
+      const actions = o.status === "pending"
+        ? `
+          <button onclick="acceptOffer(${i})">✔</button>
+          <button onclick="declineOffer(${i})">❌</button>
+        `
+        : `<small>${o.status}</small>`;
 
-        html += `
-          <div class="offer">
-            💬 ${o.pets.join(", ")}<br>
-            <small>${new Date(o.time).toLocaleString()}</small>
-            ${actions}
-          </div>
-        `;
-      });
-    } else {
-      html = "<p>No offers</p>";
-    }
+      html += `
+        <div class="offer">
+          💬 ${o.pets.join(", ")}<br>
+          <small>${new Date(o.time).toLocaleString()}</small>
+          ${actions}
+        </div>
+      `;
+    });
 
-    document.getElementById("offers").innerHTML = html;
+    document.getElementById("offers").innerHTML = html || "<p>No offers</p>";
   });
-}
+};
 
 /* ---------------- ACCEPT / DECLINE ---------------- */
 window.acceptOffer = async function(i) {
@@ -299,7 +314,7 @@ window.acceptOffer = async function(i) {
   data.offers[i].status = "accepted";
 
   await updateDoc(ref, { offers: data.offers });
-}
+};
 
 window.declineOffer = async function(i) {
   const ref = doc(db, "listings", selectedId);
@@ -309,7 +324,7 @@ window.declineOffer = async function(i) {
   data.offers[i].status = "declined";
 
   await updateDoc(ref, { offers: data.offers });
-}
+};
 
 /* ---------------- DELETE ---------------- */
 window.deleteListing = async function(id) {
@@ -322,8 +337,9 @@ window.deleteListing = async function(id) {
 
   document.getElementById("offerBox").innerHTML = "";
   document.getElementById("offers").innerHTML = "";
-}
+};
 
+/* START */
 loadPets();
 
 </script>
