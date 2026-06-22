@@ -12,23 +12,20 @@ body {
   display: flex;
 }
 
-/* LEFT PANEL */
-#leftPanel {
+#left {
   width: 45%;
   padding: 20px;
   border-right: 2px solid #2a2a44;
 }
 
-/* RIGHT PANEL */
-#rightPanel {
+#right {
   width: 55%;
   padding: 20px;
 }
 
-/* LISTING CARD */
 .card {
   background: #1c1c2e;
-  padding: 12px;
+  padding: 10px;
   margin: 10px 0;
   border-radius: 10px;
   display: flex;
@@ -36,26 +33,16 @@ body {
   align-items: center;
 }
 
-/* ICON BUTTONS */
-.iconBtn {
-  background: #2a2a44;
-  border: none;
-  color: white;
-  padding: 6px 8px;
+button {
   margin-left: 5px;
-  border-radius: 6px;
+  padding: 5px 8px;
   cursor: pointer;
 }
 
-.iconBtn:hover {
-  background: #3a3a66;
-}
-
-/* OFFER BOX */
 .offer {
   background: #2a2a44;
-  padding: 6px;
   margin: 5px 0;
+  padding: 6px;
   border-radius: 6px;
 }
 </style>
@@ -63,131 +50,151 @@ body {
 
 <body>
 
-<!-- LEFT SIDE -->
-<div id="leftPanel">
+<div id="left">
+  <h2>🐾 PS99 Trade Board</h2>
 
-<h2>🐾 PS99 Trade Board</h2>
+  <input id="username" placeholder="Username"><br><br>
 
-<input id="petName" placeholder="Post a pet">
-<button onclick="createListing()">Post</button>
+  <input id="pet" placeholder="Pet name">
+  <button onclick="createListing()">Post</button>
 
-<div id="listings"></div>
-
+  <div id="listings"></div>
 </div>
 
-<!-- RIGHT SIDE -->
-<div id="rightPanel">
+<div id="right">
+  <h2 id="title">Select a pet</h2>
 
-<h2 id="title">Select a listing</h2>
-<div id="controls"></div>
-<div id="offers"></div>
-
+  <div id="offerBox"></div>
+  <div id="offers"></div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+  updateDoc,
+  arrayUnion
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
-let listings = [];
-let selectedIndex = null;
-let viewingOffers = false;
+const firebaseConfig = {
+  apiKey: "AIzaSyBDKED4gP_qjiUJFT8aJL4_Ydjqsx0oppM",
+  authDomain: "ps99-trade-board.firebaseapp.com",
+  projectId: "ps99-trade-board",
+  storageBucket: "ps99-trade-board.firebasestorage.app",
+  messagingSenderId: "983182657873",
+  appId: "1:983182657873:web:5164ccdab414742ee86b70"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let selectedId = null;
 
 // CREATE LISTING
-function createListing() {
-  const pet = document.getElementById("petName").value;
-  if (!pet) return;
+window.createListing = async function () {
+  const pet = document.getElementById("pet").value;
+  const user = document.getElementById("username").value;
 
-  listings.push({
+  if (!pet || !user) return;
+
+  await addDoc(collection(db, "listings"), {
     pet,
+    user,
     offers: [],
-    owner: "you" // simplified (no login yet)
+    createdAt: serverTimestamp()
   });
 
-  document.getElementById("petName").value = "";
-  renderListings();
+  document.getElementById("pet").value = "";
 }
 
-// RENDER LISTINGS (LEFT SIDE)
-function renderListings() {
+// LOAD LISTINGS LIVE
+const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
+
+onSnapshot(q, (snapshot) => {
   let html = "";
 
-  listings.forEach((l, i) => {
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+
     html += `
       <div class="card">
-        🐾 <b>${l.pet}</b>
-
+        🐾 <b>${data.pet}</b>
         <div>
-          <button class="iconBtn" onclick="proposeOffer(${i})">➕</button>
-          <button class="iconBtn" onclick="viewOffers(${i})">✏</button>
-          <button class="iconBtn" onclick="deleteListing(${i})">🗑</button>
+          <button onclick="openOffer('${docSnap.id}')">➕</button>
+          <button onclick="viewOffers('${docSnap.id}')">✏</button>
+          <button onclick="deleteListing('${docSnap.id}')">🗑</button>
         </div>
       </div>
     `;
   });
 
   document.getElementById("listings").innerHTML = html;
-}
+});
 
-// ➕ PROPOSE OFFER MODE
-function proposeOffer(index) {
-  selectedIndex = index;
-  viewingOffers = false;
+// OPEN OFFER BOX
+window.openOffer = function(id) {
+  selectedId = id;
 
-  document.getElementById("title").innerText =
-    "Propose Offer for: " + listings[index].pet;
+  document.getElementById("title").innerText = "Send Offer";
 
-  document.getElementById("controls").innerHTML = `
-    <button class="iconBtn" onclick="submitOffer()">Send Offer</button>
+  document.getElementById("offerBox").innerHTML = `
+    <input id="offerInput" placeholder="Your offer">
+    <button onclick="sendOffer()">Send</button>
   `;
-
-  document.getElementById("offers").innerHTML =
-    "<p>Click send after agreeing offer details externally.</p>";
 }
 
-// ✏ VIEW OFFERS (OWNER ONLY MODE)
-function viewOffers(index) {
-  selectedIndex = index;
-  viewingOffers = true;
+// SEND OFFER
+window.sendOffer = async function () {
+  const offer = document.getElementById("offerInput").value;
+  if (!offer || !selectedId) return;
 
-  document.getElementById("title").innerText =
-    "Offers for: " + listings[index].pet;
+  const ref = doc(db, "listings", selectedId);
 
-  renderOffers();
+  await updateDoc(ref, {
+    offers: arrayUnion({
+      text: offer,
+      time: Date.now()
+    })
+  });
+
+  document.getElementById("offerInput").value = "";
 }
 
-// 🗑 DELETE LISTING
-function deleteListing(index) {
-  listings.splice(index, 1);
-  renderListings();
+// VIEW OFFERS
+window.viewOffers = async function(id) {
+  selectedId = id;
 
-  document.getElementById("title").innerText = "Select a listing";
-  document.getElementById("offers").innerHTML = "";
-  document.getElementById("controls").innerHTML = "";
-}
+  const ref = doc(db, "listings", id);
+  const snap = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js");
 
-// SUBMIT OFFER (simple placeholder system)
-function submitOffer() {
-  if (selectedIndex === null) return;
+  const dataSnap = await getDoc(ref);
+  const data = dataSnap.data();
 
-  const fakeOffer = "New offer received (placeholder)";
-
-  listings[selectedIndex].offers.push(fakeOffer);
-
-  alert("Offer sent!");
-}
-
-// SHOW OFFERS
-function renderOffers() {
-  if (!viewingOffers || selectedIndex === null) return;
+  document.getElementById("title").innerText = "Offers";
 
   let html = "";
 
-  listings[selectedIndex].offers.forEach(o => {
-    html += `<div class="offer">💬 ${o}</div>`;
-  });
+  if (data.offers) {
+    data.offers.forEach(o => {
+      html += `<div class="offer">💬 ${o.text}</div>`;
+    });
+  }
 
   document.getElementById("offers").innerHTML = html;
 }
 
-renderListings();
+// DELETE
+window.deleteListing = async function(id) {
+  await deleteDoc(doc(db, "listings", id));
+}
 
 </script>
 
