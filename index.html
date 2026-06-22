@@ -8,27 +8,54 @@ body {
   font-family: Arial;
   background: #0f0f1a;
   color: white;
-  text-align: center;
+  margin: 0;
+  display: flex;
 }
 
-input, button {
-  padding: 8px;
-  margin: 5px;
+/* LEFT PANEL */
+#leftPanel {
+  width: 45%;
+  padding: 20px;
+  border-right: 2px solid #2a2a44;
 }
 
+/* RIGHT PANEL */
+#rightPanel {
+  width: 55%;
+  padding: 20px;
+}
+
+/* LISTING CARD */
 .card {
   background: #1c1c2e;
-  width: 320px;
-  margin: 10px auto;
-  padding: 10px;
+  padding: 12px;
+  margin: 10px 0;
   border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ICON BUTTONS */
+.iconBtn {
+  background: #2a2a44;
+  border: none;
+  color: white;
+  padding: 6px 8px;
+  margin-left: 5px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
+.iconBtn:hover {
+  background: #3a3a66;
+}
+
+/* OFFER BOX */
 .offer {
   background: #2a2a44;
-  margin: 5px;
-  padding: 5px;
+  padding: 6px;
+  margin: 5px 0;
   border-radius: 6px;
 }
 </style>
@@ -36,53 +63,62 @@ input, button {
 
 <body>
 
-<h1>🐾 PS99 Trade Board</h1>
+<!-- LEFT SIDE -->
+<div id="leftPanel">
 
-<h3>Create a Pet Listing</h3>
-<input id="petName" placeholder="Pet name">
-<button onclick="createListing()">Post Pet</button>
+<h2>🐾 PS99 Trade Board</h2>
 
-<hr>
+<input id="petName" placeholder="Post a pet">
+<button onclick="createListing()">Post</button>
 
-<h3>Listings</h3>
 <div id="listings"></div>
 
-<hr>
-
-<h3 id="selectedTitle">Select a pet listing</h3>
-
-<div id="offerSection" style="display:none;">
-  <input id="offerInput" placeholder="Your offer">
-  <button onclick="addOffer()">Send Offer</button>
 </div>
 
+<!-- RIGHT SIDE -->
+<div id="rightPanel">
+
+<h2 id="title">Select a listing</h2>
+<div id="controls"></div>
 <div id="offers"></div>
 
+</div>
+
 <script>
+
 let listings = [];
 let selectedIndex = null;
+let viewingOffers = false;
 
+// CREATE LISTING
 function createListing() {
   const pet = document.getElementById("petName").value;
   if (!pet) return;
 
   listings.push({
-    pet: pet,
-    offers: []
+    pet,
+    offers: [],
+    owner: "you" // simplified (no login yet)
   });
 
   document.getElementById("petName").value = "";
   renderListings();
 }
 
+// RENDER LISTINGS (LEFT SIDE)
 function renderListings() {
   let html = "";
 
-  listings.forEach((l, index) => {
+  listings.forEach((l, i) => {
     html += `
-      <div class="card" onclick="selectListing(${index})">
-        🐾 <b>${l.pet}</b><br>
-        Offers: ${l.offers.length}
+      <div class="card">
+        🐾 <b>${l.pet}</b>
+
+        <div>
+          <button class="iconBtn" onclick="proposeOffer(${i})">➕</button>
+          <button class="iconBtn" onclick="viewOffers(${i})">✏</button>
+          <button class="iconBtn" onclick="deleteListing(${i})">🗑</button>
+        </div>
       </div>
     `;
   });
@@ -90,31 +126,57 @@ function renderListings() {
   document.getElementById("listings").innerHTML = html;
 }
 
-function selectListing(index) {
+// ➕ PROPOSE OFFER MODE
+function proposeOffer(index) {
   selectedIndex = index;
+  viewingOffers = false;
 
-  document.getElementById("selectedTitle").innerText =
-    "Trading: " + listings[index].pet;
+  document.getElementById("title").innerText =
+    "Propose Offer for: " + listings[index].pet;
 
-  document.getElementById("offerSection").style.display = "block";
+  document.getElementById("controls").innerHTML = `
+    <button class="iconBtn" onclick="submitOffer()">Send Offer</button>
+  `;
+
+  document.getElementById("offers").innerHTML =
+    "<p>Click send after agreeing offer details externally.</p>";
+}
+
+// ✏ VIEW OFFERS (OWNER ONLY MODE)
+function viewOffers(index) {
+  selectedIndex = index;
+  viewingOffers = true;
+
+  document.getElementById("title").innerText =
+    "Offers for: " + listings[index].pet;
 
   renderOffers();
 }
 
-function addOffer() {
-  const offer = document.getElementById("offerInput").value;
-  if (!offer || selectedIndex === null) return;
-
-  listings[selectedIndex].offers.push(offer);
-
-  document.getElementById("offerInput").value = "";
-
-  renderOffers();
+// 🗑 DELETE LISTING
+function deleteListing(index) {
+  listings.splice(index, 1);
   renderListings();
+
+  document.getElementById("title").innerText = "Select a listing";
+  document.getElementById("offers").innerHTML = "";
+  document.getElementById("controls").innerHTML = "";
 }
 
-function renderOffers() {
+// SUBMIT OFFER (simple placeholder system)
+function submitOffer() {
   if (selectedIndex === null) return;
+
+  const fakeOffer = "New offer received (placeholder)";
+
+  listings[selectedIndex].offers.push(fakeOffer);
+
+  alert("Offer sent!");
+}
+
+// SHOW OFFERS
+function renderOffers() {
+  if (!viewingOffers || selectedIndex === null) return;
 
   let html = "";
 
@@ -124,6 +186,9 @@ function renderOffers() {
 
   document.getElementById("offers").innerHTML = html;
 }
+
+renderListings();
+
 </script>
 
 </body>
