@@ -51,6 +51,7 @@ button {
 <div id="left">
   <h2>🐾 PS99 Trade Board</h2>
 
+  <!-- ONLY PET INPUT NOW -->
   <input id="pet" placeholder="Pet name">
   <button onclick="createListing()">Post</button>
 
@@ -96,7 +97,7 @@ const db = getFirestore(app);
 
 let selectedId = null;
 
-/* ---------------- CREATE ---------------- */
+/* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
   const pet = document.getElementById("pet").value;
   if (!pet) return;
@@ -110,7 +111,7 @@ window.createListing = async function () {
   document.getElementById("pet").value = "";
 }
 
-/* ---------------- LIVE LIST ---------------- */
+/* ---------------- LIVE LISTINGS ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -121,7 +122,7 @@ onSnapshot(q, (snapshot) => {
 
     html += `
       <div class="card">
-        🐾 <b>${data.pet || "Unknown"}</b>
+        🐾 <b>${data.pet || "Unknown Pet"}</b>
 
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
@@ -135,14 +136,14 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OFFER BOX ---------------- */
+/* ---------------- SEND OFFER BOX ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
   document.getElementById("title").innerText = "Send Offer";
 
   document.getElementById("offerBox").innerHTML = `
-    <input id="offerInput" placeholder="Type offer">
+    <input id="offerInput" placeholder="Type your offer">
     <button onclick="sendOffer()">Send</button>
   `;
 
@@ -172,12 +173,12 @@ window.viewOffers = async function (id) {
 
   let html = "";
 
-  if (data && data.offers) {
+  if (data && data.offers && data.offers.length > 0) {
     data.offers.forEach(o => {
       html += `<div class="offer">💬 ${o.text}</div>`;
     });
   } else {
-    html = "<p>No offers</p>";
+    html = "<p>No offers yet</p>";
   }
 
   document.getElementById("offers").innerHTML = html;
