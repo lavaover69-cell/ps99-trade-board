@@ -2,6 +2,7 @@
 <html>
 <head>
 <title>PS99 Trade Board</title>
+
 <style>
 body {
   font-family: Arial;
@@ -10,12 +11,25 @@ body {
   text-align: center;
 }
 
+input, button {
+  padding: 8px;
+  margin: 5px;
+}
+
 .card {
   background: #1c1c2e;
-  margin: 10px auto;
   width: 320px;
+  margin: 10px auto;
   padding: 10px;
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.offer {
+  background: #2a2a44;
+  margin: 5px;
+  padding: 5px;
+  border-radius: 6px;
 }
 </style>
 </head>
@@ -24,36 +38,91 @@ body {
 
 <h1>🐾 PS99 Trade Board</h1>
 
-<input id="pet" placeholder="Pet name">
-<input id="offer" placeholder="Your offer">
-<button onclick="postOffer()">Post Offer</button>
+<h3>Create a Pet Listing</h3>
+<input id="petName" placeholder="Pet name">
+<button onclick="createListing()">Post Pet</button>
 
-<div id="board"></div>
+<hr>
+
+<h3>Listings</h3>
+<div id="listings"></div>
+
+<hr>
+
+<h3 id="selectedTitle">Select a pet listing</h3>
+
+<div id="offerSection" style="display:none;">
+  <input id="offerInput" placeholder="Your offer">
+  <button onclick="addOffer()">Send Offer</button>
+</div>
+
+<div id="offers"></div>
 
 <script>
-let offers = [];
+let listings = [];
+let selectedIndex = null;
 
-function postOffer() {
-  const pet = document.getElementById("pet").value;
-  const offer = document.getElementById("offer").value;
+function createListing() {
+  const pet = document.getElementById("petName").value;
+  if (!pet) return;
 
-  offers.push({ pet, offer });
-  render();
+  listings.push({
+    pet: pet,
+    offers: []
+  });
+
+  document.getElementById("petName").value = "";
+  renderListings();
 }
 
-function render() {
+function renderListings() {
   let html = "";
 
-  offers.forEach(o => {
+  listings.forEach((l, index) => {
     html += `
-      <div class="card">
-        <b>${o.pet}</b><br>
-        💬 ${o.offer}
+      <div class="card" onclick="selectListing(${index})">
+        🐾 <b>${l.pet}</b><br>
+        Offers: ${l.offers.length}
       </div>
     `;
   });
 
-  document.getElementById("board").innerHTML = html;
+  document.getElementById("listings").innerHTML = html;
+}
+
+function selectListing(index) {
+  selectedIndex = index;
+
+  document.getElementById("selectedTitle").innerText =
+    "Trading: " + listings[index].pet;
+
+  document.getElementById("offerSection").style.display = "block";
+
+  renderOffers();
+}
+
+function addOffer() {
+  const offer = document.getElementById("offerInput").value;
+  if (!offer || selectedIndex === null) return;
+
+  listings[selectedIndex].offers.push(offer);
+
+  document.getElementById("offerInput").value = "";
+
+  renderOffers();
+  renderListings();
+}
+
+function renderOffers() {
+  if (selectedIndex === null) return;
+
+  let html = "";
+
+  listings[selectedIndex].offers.forEach(o => {
+    html += `<div class="offer">💬 ${o}</div>`;
+  });
+
+  document.getElementById("offers").innerHTML = html;
 }
 </script>
 
