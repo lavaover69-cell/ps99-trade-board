@@ -33,8 +33,8 @@ body {
 }
 
 button {
-  margin-left: 5px;
   padding: 5px 8px;
+  cursor: pointer;
 }
 
 .offer {
@@ -103,14 +103,14 @@ window.createListing = async function () {
 
   await addDoc(collection(db, "listings"), {
     pet: pet,
-    createdAt: serverTimestamp(),
-    offers: []
+    offers: [],
+    createdAt: serverTimestamp()
   });
 
   document.getElementById("pet").value = "";
 }
 
-/* ---------------- LOAD LIVE ---------------- */
+/* ---------------- LIVE LIST ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -121,7 +121,7 @@ onSnapshot(q, (snapshot) => {
 
     html += `
       <div class="card">
-        🐾 <b>${data.pet || "Unknown Pet"}</b>
+        🐾 <b>${data.pet || "Unknown"}</b>
 
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
@@ -135,7 +135,7 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OPEN OFFER ---------------- */
+/* ---------------- OFFER BOX ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
@@ -154,12 +154,8 @@ window.sendOffer = async function () {
   const offer = document.getElementById("offerInput").value;
   if (!offer || !selectedId) return;
 
-  const ref = doc(db, "listings", selectedId);
-
-  await updateDoc(ref, {
-    offers: arrayUnion({
-      text: offer
-    })
+  await updateDoc(doc(db, "listings", selectedId), {
+    offers: arrayUnion({ text: offer })
   });
 
   document.getElementById("offerInput").value = "";
@@ -169,20 +165,19 @@ window.sendOffer = async function () {
 window.viewOffers = async function (id) {
   selectedId = id;
 
-  const ref = doc(db, "listings", id);
-  const snap = await getDoc(ref);
+  const snap = await getDoc(doc(db, "listings", id));
   const data = snap.data();
 
   document.getElementById("title").innerText = "Offers";
 
   let html = "";
 
-  if (data && data.offers && data.offers.length > 0) {
+  if (data && data.offers) {
     data.offers.forEach(o => {
       html += `<div class="offer">💬 ${o.text}</div>`;
     });
   } else {
-    html = "<p>No offers yet</p>";
+    html = "<p>No offers</p>";
   }
 
   document.getElementById("offers").innerHTML = html;
@@ -193,8 +188,8 @@ window.deleteListing = async function (id) {
   await deleteDoc(doc(db, "listings", id));
 
   selectedId = null;
-  document.getElementById("offers").innerHTML = "";
   document.getElementById("offerBox").innerHTML = "";
+  document.getElementById("offers").innerHTML = "";
   document.getElementById("title").innerText = "Select a pet";
 }
 
