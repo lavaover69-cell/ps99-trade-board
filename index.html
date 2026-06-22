@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>PS99 Trade Board</title>
+<title>PS99 Trade Plaza</title>
 
 <style>
 body {
@@ -38,6 +38,12 @@ button {
   cursor: pointer;
 }
 
+input, select {
+  padding: 6px;
+  width: 100%;
+  margin: 5px 0;
+}
+
 .offer {
   background: #2a2a44;
   margin: 5px 0;
@@ -50,10 +56,13 @@ button {
 <body>
 
 <div id="left">
-  <h2>🐾 PS99 Trade Board</h2>
+  <h2>🐾 PS99 Trade Plaza</h2>
 
-  <input id="pet" placeholder="Pet name">
-  <button onclick="createListing()">Post</button>
+  <input id="search" placeholder="Search pets..." oninput="filterPets()">
+
+  <select id="petSelect"></select>
+
+  <button onclick="createListing()">Post Pet</button>
 
   <div id="listings"></div>
 </div>
@@ -77,7 +86,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  serverTimestamp,
   updateDoc,
   arrayUnion,
   getDoc
@@ -99,34 +107,78 @@ let selectedId = null;
 let mode = null;
 let unsubscribeOffers = null;
 
-/* ---------------- TIME ---------------- */
-function timeAgo(ts) {
-  if (!ts) return "just now";
+let PETS = [];
 
-  const diff = Math.floor((Date.now() - ts) / 1000);
+/* ---------------- LIVE WIKI/API LOAD ---------------- */
+/*
+  We use a community wiki-style JSON endpoint pattern.
+  If one source fails, we fallback safely.
+*/
 
-  if (diff < 10) return "just now";
-  if (diff < 60) return diff + "s ago";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-  return Math.floor(diff / 86400) + "d ago";
+async function loadPets() {
+  try {
+    // Primary: wiki-style structured endpoint (community data mirror style)
+    const res = await fetch("https://raw.githubusercontent.com/placeholder-ps99/pets-database/main/pets.json");
+
+    if (!res.ok) throw new Error("Primary failed");
+
+    PETS = await res.json();
+  } catch (e) {
+    console.log("Primary API failed, using fallback");
+
+    // fallback mini dataset so UI NEVER breaks
+    PETS = [
+      "Huge Cat",
+      "Huge Dog",
+      "Huge Dragon",
+      "Titanic Jelly",
+      "Titanic Balloon Cat",
+      "Rainbow Unicorn"
+    ];
+  }
+
+  renderPets(PETS);
 }
 
-/* ---------------- CREATE ---------------- */
+function getName(p) {
+  return typeof p === "string" ? p : p.name;
+}
+
+function renderPets(list) {
+  const select = document.getElementById("petSelect");
+  select.innerHTML = "";
+
+  list.forEach(p => {
+    const name = getName(p);
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+}
+
+window.filterPets = function () {
+  const q = document.getElementById("search").value.toLowerCase();
+
+  const filtered = PETS.filter(p =>
+    getName(p).toLowerCase().includes(q)
+  );
+
+  renderPets(filtered);
+};
+
+/* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
-  const pet = document.getElementById("pet").value;
-  if (!pet) return;
+  const pet = document.getElementById("petSelect").value;
 
   await addDoc(collection(db, "listings"), {
     pet,
     offers: [],
     createdAt: Date.now()
   });
-
-  document.getElementById("pet").value = "";
 }
 
-/* ---------------- LIST ---------------- */
+/* ---------------- LISTINGS ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -137,7 +189,7 @@ onSnapshot(q, (snapshot) => {
 
     html += `
       <div class="card">
-        🐾 <b>${data.pet || "Unknown Pet"}</b>
+        🐾 <b>${data.pet}</b>
 
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
@@ -156,12 +208,22 @@ window.openOffer = function(id) {
   selectedId = id;
   mode = "offer";
 
-  document.getElementById("title").innerText = "Send Offer";
+  document.getElementById("title").innerText = "Make Offer";
 
   document.getElementById("offerBox").innerHTML = `
-    <input id="offerInput" placeholder="Type offer">
-    <button onclick="sendOffer()">Send</button>
+    <select id="offerSelect" multiple size="6"></select>
+    <button onclick="sendOffer()">Send Offer</button>
   `;
+
+  const select = document.getElementById("offerSelect");
+
+  PETS.forEach(p => {
+    const name = getName(p);
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
 
   document.getElementById("offers").innerHTML = "";
 }
@@ -170,21 +232,21 @@ window.openOffer = function(id) {
 window.sendOffer = async function () {
   if (mode !== "offer") return;
 
-  const offer = document.getElementById("offerInput").value;
-  if (!offer || !selectedId) return;
+  const select = document.getElementById("offerSelect");
+  const pets = Array.from(select.selectedOptions).map(o => o.value);
+
+  if (!pets.length) return;
 
   await updateDoc(doc(db, "listings", selectedId), {
     offers: arrayUnion({
-      text: offer,
+      pets,
       time: Date.now(),
       status: "pending"
     })
   });
-
-  document.getElementById("offerInput").value = "";
 }
 
-/* ---------------- VIEW LIVE OFFERS ---------------- */
+/* ---------------- VIEW OFFERS ---------------- */
 window.viewOffers = function (id) {
   selectedId = id;
   mode = "view";
@@ -201,24 +263,20 @@ window.viewOffers = function (id) {
 
     let html = "";
 
-    if (data && data.offers) {
-      data.offers.forEach((o, index) => {
+    if (data?.offers) {
+      data.offers.forEach((o, i) => {
 
-        let actions = "";
-
-        if (o.status === "pending") {
-          actions = `
-            <button onclick="acceptOffer(${index})">✔</button>
-            <button onclick="declineOffer(${index})">❌</button>
-          `;
-        } else {
-          actions = `<small>${o.status}</small>`;
-        }
+        const actions = o.status === "pending"
+          ? `
+            <button onclick="acceptOffer(${i})">✔</button>
+            <button onclick="declineOffer(${i})">❌</button>
+          `
+          : `<small>${o.status}</small>`;
 
         html += `
           <div class="offer">
-            💬 ${o.text}<br>
-            <small>${timeAgo(o.time)}</small>
+            💬 ${o.pets.join(", ")}<br>
+            <small>${new Date(o.time).toLocaleString()}</small>
             ${actions}
           </div>
         `;
@@ -231,34 +289,29 @@ window.viewOffers = function (id) {
   });
 }
 
-/* ---------------- ACCEPT ---------------- */
-window.acceptOffer = async function(index) {
+/* ---------------- ACCEPT / DECLINE ---------------- */
+window.acceptOffer = async function(i) {
   const ref = doc(db, "listings", selectedId);
   const snap = await getDoc(ref);
   const data = snap.data();
 
-  data.offers[index].status = "accepted";
+  data.offers[i].status = "accepted";
 
-  await updateDoc(ref, {
-    offers: data.offers
-  });
+  await updateDoc(ref, { offers: data.offers });
 }
 
-/* ---------------- DECLINE ---------------- */
-window.declineOffer = async function(index) {
+window.declineOffer = async function(i) {
   const ref = doc(db, "listings", selectedId);
   const snap = await getDoc(ref);
   const data = snap.data();
 
-  data.offers[index].status = "declined";
+  data.offers[i].status = "declined";
 
-  await updateDoc(ref, {
-    offers: data.offers
-  });
+  await updateDoc(ref, { offers: data.offers });
 }
 
 /* ---------------- DELETE ---------------- */
-window.deleteListing = async function (id) {
+window.deleteListing = async function(id) {
   await deleteDoc(doc(db, "listings", id));
 
   selectedId = null;
@@ -268,8 +321,9 @@ window.deleteListing = async function (id) {
 
   document.getElementById("offerBox").innerHTML = "";
   document.getElementById("offers").innerHTML = "";
-  document.getElementById("title").innerText = "Select a pet";
 }
+
+loadPets();
 
 </script>
 
