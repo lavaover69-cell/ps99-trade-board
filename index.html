@@ -58,7 +58,9 @@ input, select {
 <div id="left">
   <h2>🐾 PS99 Trade Plaza</h2>
 
-  <input id="search" placeholder="Search pets..." oninput="filterPets()">
+  <!-- AUTOFILL INPUT -->
+  <input id="search" list="petList" placeholder="Search pets...">
+  <datalist id="petList"></datalist>
 
   <select id="petSelect"></select>
 
@@ -109,24 +111,20 @@ let unsubscribeOffers = null;
 
 let PETS = [];
 
-/* ---------------- LIVE WIKI/API LOAD ---------------- */
-/*
-  We use a community wiki-style JSON endpoint pattern.
-  If one source fails, we fallback safely.
-*/
+/* ---------------- VALIDATION ENGINE ---------------- */
+function isValidPet(name) {
+  return PETS.some(p => {
+    const petName = typeof p === "string" ? p : p.name;
+    return petName.toLowerCase() === name.toLowerCase();
+  });
+}
 
+/* ---------------- LOAD PETS ---------------- */
 async function loadPets() {
   try {
-    // Primary: wiki-style structured endpoint (community data mirror style)
     const res = await fetch("https://raw.githubusercontent.com/placeholder-ps99/pets-database/main/pets.json");
-
-    if (!res.ok) throw new Error("Primary failed");
-
     PETS = await res.json();
-  } catch (e) {
-    console.log("Primary API failed, using fallback");
-
-    // fallback mini dataset so UI NEVER breaks
+  } catch {
     PETS = [
       "Huge Cat",
       "Huge Dog",
@@ -140,36 +138,35 @@ async function loadPets() {
   renderPets(PETS);
 }
 
-function getName(p) {
-  return typeof p === "string" ? p : p.name;
-}
-
+/* ---------------- RENDER AUTOFILL ---------------- */
 function renderPets(list) {
   const select = document.getElementById("petSelect");
+  const datalist = document.getElementById("petList");
+
   select.innerHTML = "";
+  datalist.innerHTML = "";
 
   list.forEach(p => {
-    const name = getName(p);
+    const name = typeof p === "string" ? p : p.name;
+
     const opt = document.createElement("option");
     opt.value = name;
-    opt.textContent = name;
     select.appendChild(opt);
+
+    const d = document.createElement("option");
+    d.value = name;
+    datalist.appendChild(d);
   });
 }
-
-window.filterPets = function () {
-  const q = document.getElementById("search").value.toLowerCase();
-
-  const filtered = PETS.filter(p =>
-    getName(p).toLowerCase().includes(q)
-  );
-
-  renderPets(filtered);
-};
 
 /* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
   const pet = document.getElementById("petSelect").value;
+
+  if (!isValidPet(pet)) {
+    alert("Invalid pet. Please select from list.");
+    return;
+  }
 
   await addDoc(collection(db, "listings"), {
     pet,
@@ -218,7 +215,8 @@ window.openOffer = function(id) {
   const select = document.getElementById("offerSelect");
 
   PETS.forEach(p => {
-    const name = getName(p);
+    const name = typeof p === "string" ? p : p.name;
+
     const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = name;
@@ -235,7 +233,10 @@ window.sendOffer = async function () {
   const select = document.getElementById("offerSelect");
   const pets = Array.from(select.selectedOptions).map(o => o.value);
 
-  if (!pets.length) return;
+  if (!pets.length || !pets.every(isValidPet)) {
+    alert("Invalid offer. Only select valid pets.");
+    return;
+  }
 
   await updateDoc(doc(db, "listings", selectedId), {
     offers: arrayUnion({
@@ -282,7 +283,7 @@ window.viewOffers = function (id) {
         `;
       });
     } else {
-      html = "<p>No offers yet</p>";
+      html = "<p>No offers</p>";
     }
 
     document.getElementById("offers").innerHTML = html;
