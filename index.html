@@ -30,13 +30,11 @@ body {
   border-radius: 10px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
 }
 
 button {
   margin-left: 5px;
   padding: 5px 8px;
-  cursor: pointer;
 }
 
 .offer {
@@ -45,10 +43,6 @@ button {
   padding: 6px;
   border-radius: 6px;
 }
-
-small {
-  color: #aaa;
-}
 </style>
 </head>
 
@@ -56,8 +50,6 @@ small {
 
 <div id="left">
   <h2>🐾 PS99 Trade Board</h2>
-
-  <input id="username" placeholder="Username"><br><br>
 
   <input id="pet" placeholder="Pet name">
   <button onclick="createListing()">Post</button>
@@ -73,6 +65,7 @@ small {
 </div>
 
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import {
   getFirestore,
@@ -103,39 +96,21 @@ const db = getFirestore(app);
 
 let selectedId = null;
 
-/* ---------------- TIME AGO ---------------- */
-function timeAgo(ts) {
-  if (!ts) return "just now";
-
-  const now = Date.now();
-  const time = ts.toMillis ? ts.toMillis() : ts;
-  const diff = Math.floor((now - time) / 1000);
-
-  if (diff < 10) return "just now";
-  if (diff < 60) return diff + "s ago";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-  return Math.floor(diff / 86400) + "d ago";
-}
-
-/* ---------------- CREATE LISTING ---------------- */
+/* ---------------- CREATE ---------------- */
 window.createListing = async function () {
   const pet = document.getElementById("pet").value;
-  const user = document.getElementById("username").value;
-
-  if (!pet || !user) return;
+  if (!pet) return;
 
   await addDoc(collection(db, "listings"), {
-    pet,
-    user,
-    offers: [],
-    createdAt: serverTimestamp()
+    pet: pet,
+    createdAt: serverTimestamp(),
+    offers: []
   });
 
   document.getElementById("pet").value = "";
 }
 
-/* ---------------- LIVE LISTINGS ---------------- */
+/* ---------------- LOAD LIVE ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -146,10 +121,7 @@ onSnapshot(q, (snapshot) => {
 
     html += `
       <div class="card">
-        <div>
-          🐾 <b>${data.pet}</b><br>
-          <small>${timeAgo(data.createdAt)}</small>
-        </div>
+        🐾 <b>${data.pet || "Unknown Pet"}</b>
 
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
@@ -163,14 +135,14 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- SEND OFFER UI ---------------- */
+/* ---------------- OPEN OFFER ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
   document.getElementById("title").innerText = "Send Offer";
 
   document.getElementById("offerBox").innerHTML = `
-    <input id="offerInput" placeholder="Your offer">
+    <input id="offerInput" placeholder="Type offer">
     <button onclick="sendOffer()">Send</button>
   `;
 
@@ -186,8 +158,7 @@ window.sendOffer = async function () {
 
   await updateDoc(ref, {
     offers: arrayUnion({
-      text: offer,
-      time: Date.now()
+      text: offer
     })
   });
 
@@ -206,14 +177,9 @@ window.viewOffers = async function (id) {
 
   let html = "";
 
-  if (data.offers && data.offers.length > 0) {
+  if (data && data.offers && data.offers.length > 0) {
     data.offers.forEach(o => {
-      html += `
-        <div class="offer">
-          💬 ${o.text}<br>
-          <small>${timeAgo(o.time)}</small>
-        </div>
-      `;
+      html += `<div class="offer">💬 ${o.text}</div>`;
     });
   } else {
     html = "<p>No offers yet</p>";
