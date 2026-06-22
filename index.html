@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PS99 Trade Board</title>
+<style>
+body {
+  font-family: Arial;
+  background: #0f0f1a;
+  color: white;
+  text-align: center;
+}
+
+.card {
+  background: #1c1c2e;
+  margin: 10px auto;
+  width: 320px;
+  padding: 10px;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🐾 PS99 Trade Board</h1>
+
+<input id="pet" placeholder="Pet name">
+<input id="offer" placeholder="Your offer">
+<button onclick="postOffer()">Post Offer</button>
+
+<div id="board"></div>
+
+<script>
+let offers = [];
+
+function postOffer() {
+  const pet = document.getElementById("pet").value;
+  const offer = document.getElementById("offer").value;
+
+  offers.push({ pet, offer });
+  render();
+}
+
+function render() {
+  let html = "";
+
+  offers.forEach(o => {
+    html += `
+      <div class="card">
+        <b>${o.pet}</b><br>
+        💬 ${o.offer}
+      </div>
+    `;
+  });
+
+  document.getElementById("board").innerHTML = html;
+}
+</script>
+
+</body>
+</html>
