@@ -34,6 +34,7 @@ body {
 
 button {
   padding: 5px 8px;
+  margin-left: 5px;
   cursor: pointer;
 }
 
@@ -95,23 +96,37 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let selectedId = null;
-let mode = null; // "offer" or "view"
+let mode = null;
+let unsubscribeOffers = null;
 
-/* ---------------- CREATE LISTING ---------------- */
+/* ---------------- TIME ---------------- */
+function timeAgo(ts) {
+  if (!ts) return "just now";
+
+  const diff = Math.floor((Date.now() - ts) / 1000);
+
+  if (diff < 10) return "just now";
+  if (diff < 60) return diff + "s ago";
+  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+  return Math.floor(diff / 86400) + "d ago";
+}
+
+/* ---------------- CREATE ---------------- */
 window.createListing = async function () {
   const pet = document.getElementById("pet").value;
   if (!pet) return;
 
   await addDoc(collection(db, "listings"), {
-    pet: pet,
+    pet,
     offers: [],
-    createdAt: serverTimestamp()
+    createdAt: Date.now()
   });
 
   document.getElementById("pet").value = "";
 }
 
-/* ---------------- LIVE LIST ---------------- */
+/* ---------------- LIST ---------------- */
 const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 
 onSnapshot(q, (snapshot) => {
@@ -144,50 +159,102 @@ window.openOffer = function(id) {
   document.getElementById("title").innerText = "Send Offer";
 
   document.getElementById("offerBox").innerHTML = `
-    <input id="offerInput" placeholder="Type your offer">
+    <input id="offerInput" placeholder="Type offer">
     <button onclick="sendOffer()">Send</button>
   `;
 
   document.getElementById("offers").innerHTML = "";
 }
 
-/* ---------------- VIEW MODE ---------------- */
-window.viewOffers = async function (id) {
-  selectedId = id;
-  mode = "view";
-
-  const snap = await getDoc(doc(db, "listings", id));
-  const data = snap.data();
-
-  document.getElementById("title").innerText = "Offers";
-
-  document.getElementById("offerBox").innerHTML = ""; // LOCK OFFERING
-
-  let html = "";
-
-  if (data && data.offers && data.offers.length > 0) {
-    data.offers.forEach(o => {
-      html += `<div class="offer">💬 ${o.text}</div>`;
-    });
-  } else {
-    html = "<p>No offers yet</p>";
-  }
-
-  document.getElementById("offers").innerHTML = html;
-}
-
 /* ---------------- SEND OFFER ---------------- */
 window.sendOffer = async function () {
-  if (mode !== "offer") return; // HARD LOCK FIX
+  if (mode !== "offer") return;
 
   const offer = document.getElementById("offerInput").value;
   if (!offer || !selectedId) return;
 
   await updateDoc(doc(db, "listings", selectedId), {
-    offers: arrayUnion({ text: offer })
+    offers: arrayUnion({
+      text: offer,
+      time: Date.now(),
+      status: "pending"
+    })
   });
 
   document.getElementById("offerInput").value = "";
+}
+
+/* ---------------- VIEW LIVE OFFERS ---------------- */
+window.viewOffers = function (id) {
+  selectedId = id;
+  mode = "view";
+
+  document.getElementById("title").innerText = "Offers";
+  document.getElementById("offerBox").innerHTML = "";
+
+  if (unsubscribeOffers) unsubscribeOffers();
+
+  const ref = doc(db, "listings", id);
+
+  unsubscribeOffers = onSnapshot(ref, (snap) => {
+    const data = snap.data();
+
+    let html = "";
+
+    if (data && data.offers) {
+      data.offers.forEach((o, index) => {
+
+        let actions = "";
+
+        if (o.status === "pending") {
+          actions = `
+            <button onclick="acceptOffer(${index})">✔</button>
+            <button onclick="declineOffer(${index})">❌</button>
+          `;
+        } else {
+          actions = `<small>${o.status}</small>`;
+        }
+
+        html += `
+          <div class="offer">
+            💬 ${o.text}<br>
+            <small>${timeAgo(o.time)}</small>
+            ${actions}
+          </div>
+        `;
+      });
+    } else {
+      html = "<p>No offers yet</p>";
+    }
+
+    document.getElementById("offers").innerHTML = html;
+  });
+}
+
+/* ---------------- ACCEPT ---------------- */
+window.acceptOffer = async function(index) {
+  const ref = doc(db, "listings", selectedId);
+  const snap = await getDoc(ref);
+  const data = snap.data();
+
+  data.offers[index].status = "accepted";
+
+  await updateDoc(ref, {
+    offers: data.offers
+  });
+}
+
+/* ---------------- DECLINE ---------------- */
+window.declineOffer = async function(index) {
+  const ref = doc(db, "listings", selectedId);
+  const snap = await getDoc(ref);
+  const data = snap.data();
+
+  data.offers[index].status = "declined";
+
+  await updateDoc(ref, {
+    offers: data.offers
+  });
 }
 
 /* ---------------- DELETE ---------------- */
@@ -196,6 +263,8 @@ window.deleteListing = async function (id) {
 
   selectedId = null;
   mode = null;
+
+  if (unsubscribeOffers) unsubscribeOffers();
 
   document.getElementById("offerBox").innerHTML = "";
   document.getElementById("offers").innerHTML = "";
