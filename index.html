@@ -15,8 +15,8 @@ body {
 #left {
   width: 45%;
   padding: 20px;
-  border-right: 2px solid #2a2a44;
   position: relative;
+  border-right: 2px solid #2a2a44;
 }
 
 #right {
@@ -35,7 +35,6 @@ body {
 
 button {
   padding: 5px 8px;
-  margin-left: 5px;
   cursor: pointer;
 }
 
@@ -46,10 +45,10 @@ input {
 }
 
 #suggestBox {
-  background: #1c1c2e;
-  border: 1px solid #333;
   position: absolute;
   width: calc(100% - 40px);
+  background: #1c1c2e;
+  border: 1px solid #333;
   max-height: 220px;
   overflow-y: auto;
   z-index: 999;
@@ -78,7 +77,7 @@ input {
 <div id="left">
   <h2>🐾 PS99 Trade Plaza</h2>
 
-  <input id="petInput" placeholder="Search PS99 pets..." oninput="showSuggestions()">
+  <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
 
   <button onclick="createListing()">Post Pet</button>
@@ -122,22 +121,27 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+let PETS = [];
 let selectedId = null;
-let mode = null;
 let unsubscribeOffers = null;
 
-let PETS = [];
-
-/* ---------------- BIG GAMES API LOAD ---------------- */
+/* ---------------- FIXED BIG GAMES API LOAD ---------------- */
 async function loadPets() {
   try {
     const res = await fetch("https://ps99.biggamesapi.io/api/collection/Pets");
     const json = await res.json();
 
-    PETS = json.data.map(p => p.configName);
+    PETS = (json.data || [])
+      .map(p => p.configName)
+      .filter(Boolean);
+
+    // remove duplicates + sort
+    PETS = [...new Set(PETS)].sort();
+
+    console.log("Loaded pets:", PETS.length);
 
   } catch (e) {
-    console.log("API failed, fallback used");
+    console.log("API failed fallback used");
 
     PETS = [
       "Huge Cat",
@@ -149,11 +153,12 @@ async function loadPets() {
   }
 }
 
+/* ---------------- VALIDATION ---------------- */
 function isValidPet(name) {
   return PETS.some(p => p.toLowerCase() === name.toLowerCase());
 }
 
-/* ---------------- AUTOFILL ---------------- */
+/* ---------------- TRUE AUTOFILL ---------------- */
 window.showSuggestions = function () {
   const input = document.getElementById("petInput").value.toLowerCase();
   const box = document.getElementById("suggestBox");
@@ -163,9 +168,9 @@ window.showSuggestions = function () {
 
   const matches = PETS
     .filter(p => p.toLowerCase().includes(input))
-    .slice(0, 10);
+    .slice(0, 12);
 
-  matches.forEach(p => {
+  for (const p of matches) {
     const div = document.createElement("div");
     div.className = "suggestItem";
     div.innerText = p;
@@ -176,7 +181,7 @@ window.showSuggestions = function () {
     };
 
     box.appendChild(div);
-  });
+  }
 };
 
 /* ---------------- CREATE LISTING ---------------- */
@@ -184,7 +189,7 @@ window.createListing = async function () {
   const pet = document.getElementById("petInput").value;
 
   if (!isValidPet(pet)) {
-    alert("Invalid pet. Please select from PS99 list.");
+    alert("Invalid pet — must select from autocomplete.");
     return;
   }
 
@@ -203,13 +208,12 @@ const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
 onSnapshot(q, (snapshot) => {
   let html = "";
 
-  snapshot.forEach((d) => {
+  snapshot.forEach(d => {
     const data = d.data();
 
     html += `
       <div class="card">
         🐾 <b>${data.pet}</b>
-
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
           <button onclick="viewOffers('${d.id}')">✏</button>
@@ -222,44 +226,59 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OFFER MODE ---------------- */
+/* ---------------- OFFER MODE (NO CHECKLIST) ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
-  mode = "offer";
 
   document.getElementById("title").innerText = "Make Offer";
 
-  let html = "<p>Select pets:</p>";
-
-  PETS.slice(0, 50).forEach(p => {
-    html += `
-      <label>
-        <input type="checkbox" value="${p}"> ${p}
-      </label><br>
-    `;
-  });
-
-  html += `<br><button onclick="sendOffer()">Send Offer</button>`;
+  let html = `
+    <p>Type or select pets:</p>
+    <input id="offerInput" placeholder="Type pet name..." oninput="offerSuggest()">
+    <div id="offerSuggest"></div>
+    <button onclick="sendOffer()">Send Offer</button>
+  `;
 
   document.getElementById("offerBox").innerHTML = html;
   document.getElementById("offers").innerHTML = "";
 };
 
+/* ---------------- OFFER AUTOFILL ---------------- */
+window.offerSuggest = function () {
+  const input = document.getElementById("offerInput").value.toLowerCase();
+  const box = document.getElementById("offerSuggest");
+
+  box.innerHTML = "";
+  if (!input) return;
+
+  const matches = PETS.filter(p => p.toLowerCase().includes(input)).slice(0, 10);
+
+  matches.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "suggestItem";
+    div.innerText = p;
+
+    div.onclick = () => {
+      document.getElementById("offerInput").value = p;
+      box.innerHTML = "";
+    };
+
+    box.appendChild(div);
+  });
+};
+
 /* ---------------- SEND OFFER ---------------- */
 window.sendOffer = async function () {
-  const checkboxes = document.querySelectorAll("#offerBox input[type=checkbox]");
-  const pets = Array.from(checkboxes)
-    .filter(c => c.checked)
-    .map(c => c.value);
+  const pet = document.getElementById("offerInput").value;
 
-  if (!pets.length || !pets.every(isValidPet)) {
-    alert("Invalid offer.");
+  if (!isValidPet(pet)) {
+    alert("Invalid offer pet.");
     return;
   }
 
   await updateDoc(doc(db, "listings", selectedId), {
     offers: arrayUnion({
-      pets,
+      pets: [pet],
       time: Date.now(),
       status: "pending"
     })
@@ -269,34 +288,22 @@ window.sendOffer = async function () {
 /* ---------------- VIEW OFFERS ---------------- */
 window.viewOffers = function (id) {
   selectedId = id;
-  mode = "view";
-
-  document.getElementById("title").innerText = "Offers";
-  document.getElementById("offerBox").innerHTML = "";
 
   if (unsubscribeOffers) unsubscribeOffers();
 
   const ref = doc(db, "listings", id);
 
-  unsubscribeOffers = onSnapshot(ref, (snap) => {
+  unsubscribeOffers = onSnapshot(ref, snap => {
     const data = snap.data();
 
     let html = "";
 
     data?.offers?.forEach((o, i) => {
-
-      const actions = o.status === "pending"
-        ? `
-          <button onclick="acceptOffer(${i})">✔</button>
-          <button onclick="declineOffer(${i})">❌</button>
-        `
-        : `<small>${o.status}</small>`;
-
       html += `
         <div class="offer">
           💬 ${o.pets.join(", ")}<br>
-          <small>${new Date(o.time).toLocaleString()}</small>
-          ${actions}
+          <small>${new Date(o.time).toLocaleString()}</small><br>
+          ${o.status}
         </div>
       `;
     });
@@ -305,41 +312,11 @@ window.viewOffers = function (id) {
   });
 };
 
-/* ---------------- ACCEPT / DECLINE ---------------- */
-window.acceptOffer = async function(i) {
-  const ref = doc(db, "listings", selectedId);
-  const snap = await getDoc(ref);
-  const data = snap.data();
-
-  data.offers[i].status = "accepted";
-
-  await updateDoc(ref, { offers: data.offers });
-};
-
-window.declineOffer = async function(i) {
-  const ref = doc(db, "listings", selectedId);
-  const snap = await getDoc(ref);
-  const data = snap.data();
-
-  data.offers[i].status = "declined";
-
-  await updateDoc(ref, { offers: data.offers });
-};
-
 /* ---------------- DELETE ---------------- */
 window.deleteListing = async function(id) {
   await deleteDoc(doc(db, "listings", id));
-
-  selectedId = null;
-  mode = null;
-
-  if (unsubscribeOffers) unsubscribeOffers();
-
-  document.getElementById("offerBox").innerHTML = "";
-  document.getElementById("offers").innerHTML = "";
 };
 
-/* START */
 loadPets();
 
 </script>
