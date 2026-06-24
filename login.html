@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login - Infrdomain Trade Plaza</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #0f0f1a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .box {
+      background: #1c1c2e;
+      padding: 20px;
+      border-radius: 10px;
+      width: 320px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      border: none;
+      border-radius: 5px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #2a2a44;
+      color: white;
+    }
+
+    button:hover {
+      background: #3a3a5a;
+    }
+
+    #msg {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="box">
+  <h2>Infrdomain Login</h2>
+
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+
+  <button onclick="signup()">Sign Up</button>
+  <button onclick="login()">Login</button>
+
+  <p id="msg"></p>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "ps99-trade-board.firebaseapp.com",
+  projectId: "ps99-trade-board"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+const emailInput = document.getElementById("email");
+const passInput = document.getElementById("password");
+const msg = document.getElementById("msg");
+
+window.signup = async function () {
+  try {
+    await createUserWithEmailAndPassword(auth, emailInput.value, passInput.value);
+    msg.innerText = "Account created!";
+    window.location.href = "index.html";
+  } catch (e) {
+    msg.innerText = e.message;
+  }
+};
+
+window.login = async function () {
+  try {
+    await signInWithEmailAndPassword(auth, emailInput.value, passInput.value);
+    window.location.href = "index.html";
+  } catch (e) {
+    msg.innerText = e.message;
+  }
+};
+
+</script>
+
+</body>
+</html>
