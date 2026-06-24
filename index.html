@@ -77,6 +77,8 @@ input {
 <div id="left">
   <h2>🐾 PS99 Trade Plaza</h2>
 
+  <button onclick="logout()">Logout</button>
+
   <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
 
@@ -105,27 +107,47 @@ import {
   query,
   orderBy,
   updateDoc,
-  arrayUnion,
-  getDoc
+  arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBDKED4gP_qjiUJFT8aJL4_Ydjqsx0oppM",
+  apiKey: "YOUR_API_KEY",
   authDomain: "ps99-trade-board.firebaseapp.com",
-  projectId: "ps99-trade-board",
-  storageBucket: "ps99-trade-board.firebasestorage.app",
-  messagingSenderId: "983182657873",
-  appId: "1:983182657873:web:5164ccdab414742ee86b70"
+  projectId: "ps99-trade-board"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
+let user = null;
 let PETS = [];
 let selectedId = null;
 let unsubscribeOffers = null;
 
-/* ---------------- FIXED BIG GAMES API LOAD ---------------- */
+/* ---------------- AUTH LOCK ---------------- */
+onAuthStateChanged(auth, (u) => {
+  if (!u) {
+    window.location.href = "login.html";
+  } else {
+    user = u;
+    console.log("Logged in:", u.email);
+  }
+});
+
+/* ---------------- LOGOUT ---------------- */
+window.logout = async function () {
+  await signOut(auth);
+  window.location.href = "login.html";
+};
+
+/* ---------------- PET API ---------------- */
 async function loadPets() {
   try {
     const res = await fetch("https://ps99.biggamesapi.io/api/collection/Pets");
@@ -135,30 +157,18 @@ async function loadPets() {
       .map(p => p.configName)
       .filter(Boolean);
 
-    // remove duplicates + sort
     PETS = [...new Set(PETS)].sort();
 
-    console.log("Loaded pets:", PETS.length);
-
-  } catch (e) {
-    console.log("API failed fallback used");
-
-    PETS = [
-      "Huge Cat",
-      "Huge Dog",
-      "Huge Dragon",
-      "Titanic Jelly",
-      "Titanic Balloon Cat"
-    ];
+  } catch {
+    PETS = ["Huge Cat", "Huge Dog", "Titanic Jelly"];
   }
 }
 
-/* ---------------- VALIDATION ---------------- */
 function isValidPet(name) {
   return PETS.some(p => p.toLowerCase() === name.toLowerCase());
 }
 
-/* ---------------- TRUE AUTOFILL ---------------- */
+/* ---------------- AUTOFILL ---------------- */
 window.showSuggestions = function () {
   const input = document.getElementById("petInput").value.toLowerCase();
   const box = document.getElementById("suggestBox");
@@ -166,36 +176,32 @@ window.showSuggestions = function () {
   box.innerHTML = "";
   if (!input) return;
 
-  const matches = PETS
-    .filter(p => p.toLowerCase().includes(input))
-    .slice(0, 12);
-
-  for (const p of matches) {
-    const div = document.createElement("div");
-    div.className = "suggestItem";
-    div.innerText = p;
-
-    div.onclick = () => {
-      document.getElementById("petInput").value = p;
-      box.innerHTML = "";
-    };
-
-    box.appendChild(div);
-  }
+  PETS.filter(p => p.toLowerCase().includes(input))
+    .slice(0, 12)
+    .forEach(p => {
+      const div = document.createElement("div");
+      div.className = "suggestItem";
+      div.innerText = p;
+      div.onclick = () => {
+        document.getElementById("petInput").value = p;
+        box.innerHTML = "";
+      };
+      box.appendChild(div);
+    });
 };
 
 /* ---------------- CREATE LISTING ---------------- */
 window.createListing = async function () {
   const pet = document.getElementById("petInput").value;
 
-  if (!isValidPet(pet)) {
-    alert("Invalid pet — must select from autocomplete.");
-    return;
-  }
+  if (!user) return alert("Not logged in");
+  if (!isValidPet(pet)) return alert("Invalid pet");
 
   await addDoc(collection(db, "listings"), {
     pet,
     offers: [],
+    ownerId: user.uid,
+    ownerEmail: user.email,
     createdAt: Date.now()
   });
 
@@ -217,7 +223,12 @@ onSnapshot(q, (snapshot) => {
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
           <button onclick="viewOffers('${d.id}')">✏</button>
-          <button onclick="deleteListing('${d.id}')">🗑</button>
+
+          ${
+            data.ownerId === user?.uid
+              ? `<button onclick="deleteListing('${d.id}')">🗑</button>`
+              : ""
+          }
         </div>
       </div>
     `;
@@ -226,93 +237,57 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OFFER MODE (NO CHECKLIST) ---------------- */
+/* ---------------- OFFER SYSTEM ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
   document.getElementById("title").innerText = "Make Offer";
 
-  let html = `
-    <p>Type or select pets:</p>
+  document.getElementById("offerBox").innerHTML = `
     <input id="offerInput" placeholder="Type pet name..." oninput="offerSuggest()">
     <div id="offerSuggest"></div>
     <button onclick="sendOffer()">Send Offer</button>
   `;
 
-  document.getElementById("offerBox").innerHTML = html;
   document.getElementById("offers").innerHTML = "";
 };
 
-/* ---------------- OFFER AUTOFILL ---------------- */
-window.offerSuggest = function () {
-  const input = document.getElementById("offerInput").value.toLowerCase();
-  const box = document.getElementById("offerSuggest");
-
-  box.innerHTML = "";
-  if (!input) return;
-
-  const matches = PETS.filter(p => p.toLowerCase().includes(input)).slice(0, 10);
-
-  matches.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "suggestItem";
-    div.innerText = p;
-
-    div.onclick = () => {
-      document.getElementById("offerInput").value = p;
-      box.innerHTML = "";
-    };
-
-    box.appendChild(div);
-  });
-};
-
-/* ---------------- SEND OFFER ---------------- */
 window.sendOffer = async function () {
   const pet = document.getElementById("offerInput").value;
 
-  if (!isValidPet(pet)) {
-    alert("Invalid offer pet.");
-    return;
-  }
+  if (!isValidPet(pet)) return alert("Invalid pet");
 
   await updateDoc(doc(db, "listings", selectedId), {
     offers: arrayUnion({
       pets: [pet],
       time: Date.now(),
+      from: user.email,
       status: "pending"
     })
   });
 };
 
-/* ---------------- VIEW OFFERS ---------------- */
 window.viewOffers = function (id) {
   selectedId = id;
 
-  if (unsubscribeOffers) unsubscribeOffers();
-
   const ref = doc(db, "listings", id);
+
+  if (unsubscribeOffers) unsubscribeOffers();
 
   unsubscribeOffers = onSnapshot(ref, snap => {
     const data = snap.data();
 
-    let html = "";
-
-    data?.offers?.forEach((o, i) => {
-      html += `
+    document.getElementById("offers").innerHTML =
+      data?.offers?.map(o => `
         <div class="offer">
           💬 ${o.pets.join(", ")}<br>
-          <small>${new Date(o.time).toLocaleString()}</small><br>
+          <small>${o.from}</small><br>
           ${o.status}
         </div>
-      `;
-    });
-
-    document.getElementById("offers").innerHTML = html || "<p>No offers</p>";
+      `).join("") || "<p>No offers</p>";
   });
 };
 
-/* ---------------- DELETE ---------------- */
 window.deleteListing = async function(id) {
   await deleteDoc(doc(db, "listings", id));
 };
