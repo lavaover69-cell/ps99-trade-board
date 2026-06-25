@@ -1,7 +1,8 @@
 <!DOCTYPE html>
+
 <html>
 <head>
-<title>PS99 Trade Plaza</title>
+<title>PS99 Trade Hub</title>
 
 <style>
 body {
@@ -22,6 +23,13 @@ body {
 #right {
   width: 55%;
   padding: 20px;
+}
+
+#userbar {
+  background: #1c1c2e;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
 }
 
 .card {
@@ -70,25 +78,28 @@ input {
   border-radius: 6px;
 }
 </style>
+
 </head>
 
 <body>
 
 <div id="left">
-  <h2>🐾 PS99 Trade Plaza</h2>
+  <h2>🐾 PS99 Trade Hub</h2>
 
-  <button onclick="logout()">Logout</button>
+  <div id="userbar"></div>
+
+<button onclick="logout()">Logout</button>
 
   <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
 
-  <button onclick="createListing()">Post Pet</button>
+<button onclick="createListing()">Post Pet</button>
 
   <div id="listings"></div>
 </div>
 
 <div id="right">
-  <h2 id="title">Select a pet</h2>
+  <h2 id="title">Offers</h2>
 
   <div id="offerBox"></div>
   <div id="offers"></div>
@@ -97,6 +108,7 @@ input {
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+
 import {
   getFirestore,
   collection,
@@ -112,14 +124,17 @@ import {
 
 import {
   getAuth,
-  onAuthStateChanged,
-  signOut
+  signOut,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
+  apiKey: "AIzaSyBDKED4gP_qjiUJFT8aJL4_Ydjqsx0oppM",
   authDomain: "ps99-trade-board.firebaseapp.com",
-  projectId: "ps99-trade-board"
+  projectId: "ps99-trade-board",
+  storageBucket: "ps99-trade-board.firebasestorage.app",
+  messagingSenderId: "983182657873",
+  appId: "1:983182657873:web:9717c3dce90f97a5e86b70"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -127,27 +142,31 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 let user = null;
+let username = localStorage.getItem("username");
+
 let PETS = [];
 let selectedId = null;
-let unsubscribeOffers = null;
 
-/* ---------------- AUTH LOCK ---------------- */
+/* ---------------- AUTH GUARD ---------------- */
 onAuthStateChanged(auth, (u) => {
   if (!u) {
-    window.location.href = "login.html";
+    window.location.href = "https://lavaover69.github.io/infrdomain-login/";
   } else {
     user = u;
-    console.log("Logged in:", u.email);
+
+    document.getElementById("userbar").innerText =
+      "Logged in as: " + username;
   }
 });
 
 /* ---------------- LOGOUT ---------------- */
 window.logout = async function () {
   await signOut(auth);
-  window.location.href = "login.html";
+  localStorage.clear();
+  window.location.href = "https://lavaover69.github.io/infrdomain-login/";
 };
 
-/* ---------------- PET API ---------------- */
+/* ---------------- LOAD PETS ---------------- */
 async function loadPets() {
   try {
     const res = await fetch("https://ps99.biggamesapi.io/api/collection/Pets");
@@ -199,9 +218,9 @@ window.createListing = async function () {
 
   await addDoc(collection(db, "listings"), {
     pet,
+    ownerUid: user.uid,
+    ownerUsername: username,
     offers: [],
-    ownerId: user.uid,
-    ownerEmail: user.email,
     createdAt: Date.now()
   });
 
@@ -222,12 +241,11 @@ onSnapshot(q, (snapshot) => {
         🐾 <b>${data.pet}</b>
         <div>
           <button onclick="openOffer('${d.id}')">➕</button>
-          <button onclick="viewOffers('${d.id}')">✏</button>
+          <button onclick="viewOffers('${d.id}')">👁</button>
 
-          ${
-            data.ownerId === user?.uid
-              ? `<button onclick="deleteListing('${d.id}')">🗑</button>`
-              : ""
+          ${data.ownerUid === user?.uid
+            ? `<button onclick="deleteListing('${d.id}')">🗑</button>`
+            : ""
           }
         </div>
       </div>
@@ -241,15 +259,10 @@ onSnapshot(q, (snapshot) => {
 window.openOffer = function(id) {
   selectedId = id;
 
-  document.getElementById("title").innerText = "Make Offer";
-
   document.getElementById("offerBox").innerHTML = `
-    <input id="offerInput" placeholder="Type pet name..." oninput="offerSuggest()">
-    <div id="offerSuggest"></div>
+    <input id="offerInput" placeholder="Offer pet...">
     <button onclick="sendOffer()">Send Offer</button>
   `;
-
-  document.getElementById("offers").innerHTML = "";
 };
 
 window.sendOffer = async function () {
@@ -260,34 +273,31 @@ window.sendOffer = async function () {
   await updateDoc(doc(db, "listings", selectedId), {
     offers: arrayUnion({
       pets: [pet],
+      from: username,
       time: Date.now(),
-      from: user.email,
       status: "pending"
     })
   });
 };
 
 window.viewOffers = function (id) {
-  selectedId = id;
-
   const ref = doc(db, "listings", id);
 
-  if (unsubscribeOffers) unsubscribeOffers();
-
-  unsubscribeOffers = onSnapshot(ref, snap => {
+  onSnapshot(ref, snap => {
     const data = snap.data();
 
     document.getElementById("offers").innerHTML =
       data?.offers?.map(o => `
         <div class="offer">
           💬 ${o.pets.join(", ")}<br>
-          <small>${o.from}</small><br>
-          ${o.status}
+          👤 ${o.from}<br>
+          ⏱ ${new Date(o.time).toLocaleString()}
         </div>
       `).join("") || "<p>No offers</p>";
   });
 };
 
+/* ---------------- DELETE ---------------- */
 window.deleteListing = async function(id) {
   await deleteDoc(doc(db, "listings", id));
 };
