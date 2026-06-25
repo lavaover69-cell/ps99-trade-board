@@ -16,7 +16,6 @@ body {
 #left {
   width: 45%;
   padding: 20px;
-  position: relative;
   border-right: 2px solid #2a2a44;
 }
 
@@ -86,7 +85,7 @@ input {
 <div id="left">
   <h2>🐾 PS99 Trade Hub</h2>
 
-  <div id="userbar"></div>
+  <div id="userbar">Loading user...</div>
 
   <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
@@ -97,7 +96,7 @@ input {
 </div>
 
 <div id="right">
-  <h2 id="title">Offers</h2>
+  <h2>Offers</h2>
 
   <div id="offerBox"></div>
   <div id="offers"></div>
@@ -117,7 +116,8 @@ import {
   query,
   orderBy,
   updateDoc,
-  arrayUnion
+  arrayUnion,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 import {
@@ -139,13 +139,13 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 let user = null;
-let username = localStorage.getItem("username");
+let username = "Loading...";
 
 let PETS = [];
 let selectedId = null;
 
-/* ---------------- AUTH GUARD ---------------- */
-onAuthStateChanged(auth, (u) => {
+/* ---------------- AUTH + USERNAME FIX ---------------- */
+onAuthStateChanged(auth, async (u) => {
   if (!u) {
     window.location.href =
       "https://sites.google.com/view/infrdomain/home/log-in?authuser=0";
@@ -154,11 +154,28 @@ onAuthStateChanged(auth, (u) => {
 
   user = u;
 
+  // try localStorage first
+  let storedUsername = localStorage.getItem("username");
+
+  if (!storedUsername) {
+    try {
+      const snap = await getDoc(doc(db, "usernames", u.uid));
+
+      if (snap.exists()) {
+        storedUsername = snap.data().username;
+      }
+    } catch (e) {
+      console.log("Username fetch failed");
+    }
+  }
+
+  username = storedUsername || "Unknown User";
+
   document.getElementById("userbar").innerText =
     "Logged in as: " + username;
 });
 
-/* ---------------- LOAD PETS ---------------- */
+/* ---------------- PET API ---------------- */
 async function loadPets() {
   try {
     const res = await fetch("https://ps99.biggamesapi.io/api/collection/Pets");
@@ -169,7 +186,6 @@ async function loadPets() {
       .filter(Boolean);
 
     PETS = [...new Set(PETS)].sort();
-
   } catch {
     PETS = ["Huge Cat", "Huge Dog", "Titanic Jelly"];
   }
