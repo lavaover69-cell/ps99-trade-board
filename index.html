@@ -88,8 +88,6 @@ input {
 
   <div id="userbar"></div>
 
-<button onclick="logout()">Logout</button>
-
   <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
 
@@ -124,7 +122,6 @@ import {
 
 import {
   getAuth,
-  signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
@@ -150,21 +147,16 @@ let selectedId = null;
 /* ---------------- AUTH GUARD ---------------- */
 onAuthStateChanged(auth, (u) => {
   if (!u) {
-    window.location.href = "https://lavaover69.github.io/infrdomain-login/";
-  } else {
-    user = u;
-
-    document.getElementById("userbar").innerText =
-      "Logged in as: " + username;
+    window.location.href =
+      "https://sites.google.com/view/infrdomain/home/log-in?authuser=0";
+    return;
   }
-});
 
-/* ---------------- LOGOUT ---------------- */
-window.logout = async function () {
-  await signOut(auth);
-  localStorage.clear();
-  window.location.href = "https://lavaover69.github.io/infrdomain-login/";
-};
+  user = u;
+
+  document.getElementById("userbar").innerText =
+    "Logged in as: " + username;
+});
 
 /* ---------------- LOAD PETS ---------------- */
 async function loadPets() {
@@ -255,7 +247,7 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OFFER SYSTEM ---------------- */
+/* ---------------- OFFERS ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
