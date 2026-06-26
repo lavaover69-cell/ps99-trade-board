@@ -85,7 +85,7 @@ input {
 <div id="left">
   <h2>🐾 PS99 Trade Hub</h2>
 
-  <div id="userbar">Loading user...</div>
+  <div id="userbar">Loading...</div>
 
   <input id="petInput" placeholder="Search PS99 pet..." oninput="showSuggestions()">
   <div id="suggestBox"></div>
@@ -139,13 +139,13 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 let user = null;
-let username = "Loading...";
+let username = localStorage.getItem("username") || "Unknown";
 
 let PETS = [];
 let selectedId = null;
 
-/* ---------------- AUTH + USERNAME FIX ---------------- */
-onAuthStateChanged(auth, async (u) => {
+/* ---------------- AUTH GUARD ---------------- */
+onAuthStateChanged(auth, (u) => {
   if (!u) {
     window.location.href =
       "https://sites.google.com/view/infrdomain/home/log-in?authuser=0";
@@ -153,23 +153,6 @@ onAuthStateChanged(auth, async (u) => {
   }
 
   user = u;
-
-  // try localStorage first
-  let storedUsername = localStorage.getItem("username");
-
-  if (!storedUsername) {
-    try {
-      const snap = await getDoc(doc(db, "usernames", u.uid));
-
-      if (snap.exists()) {
-        storedUsername = snap.data().username;
-      }
-    } catch (e) {
-      console.log("Username fetch failed");
-    }
-  }
-
-  username = storedUsername || "Unknown User";
 
   document.getElementById("userbar").innerText =
     "Logged in as: " + username;
@@ -186,6 +169,7 @@ async function loadPets() {
       .filter(Boolean);
 
     PETS = [...new Set(PETS)].sort();
+
   } catch {
     PETS = ["Huge Cat", "Huge Dog", "Titanic Jelly"];
   }
@@ -263,7 +247,7 @@ onSnapshot(q, (snapshot) => {
   document.getElementById("listings").innerHTML = html;
 });
 
-/* ---------------- OFFERS ---------------- */
+/* ---------------- OFFER ---------------- */
 window.openOffer = function(id) {
   selectedId = id;
 
@@ -288,18 +272,56 @@ window.sendOffer = async function () {
   });
 };
 
+/* ---------------- ACCEPT OFFER ---------------- */
+window.acceptOffer = async function(listingId, index) {
+
+  const ref = doc(db, "listings", listingId);
+  const snap = await getDoc(ref);
+
+  let data = snap.data();
+
+  data.offers[index].status = "accepted";
+
+  await updateDoc(ref, {
+    offers: data.offers
+  });
+};
+
+/* ---------------- DECLINE OFFER ---------------- */
+window.declineOffer = async function(listingId, index) {
+
+  const ref = doc(db, "listings", listingId);
+  const snap = await getDoc(ref);
+
+  let data = snap.data();
+
+  data.offers[index].status = "declined";
+
+  await updateDoc(ref, {
+    offers: data.offers
+  });
+};
+
+/* ---------------- VIEW OFFERS ---------------- */
 window.viewOffers = function (id) {
+
   const ref = doc(db, "listings", id);
 
   onSnapshot(ref, snap => {
     const data = snap.data();
 
     document.getElementById("offers").innerHTML =
-      data?.offers?.map(o => `
+      data?.offers?.map((o, i) => `
         <div class="offer">
           💬 ${o.pets.join(", ")}<br>
           👤 ${o.from}<br>
-          ⏱ ${new Date(o.time).toLocaleString()}
+          ⏱ ${new Date(o.time).toLocaleString()}<br>
+          📌 ${o.status}
+
+          ${o.status === "pending" ? `
+            <button onclick="acceptOffer('${id}', ${i})">✅ Accept</button>
+            <button onclick="declineOffer('${id}', ${i})">❌ Decline</button>
+          ` : ""}
         </div>
       `).join("") || "<p>No offers</p>";
   });
